@@ -11,9 +11,9 @@ VALUES = {
 # Configuration
 NUM_DECKS = 6
 PENETRATION = 0.75  
-HIT_SOFT_17 = True  
+HIT_SOFT_17 = False  
 BASE_BET = 10
-WONG_OUT_THRESHOLD = -4
+WONG_OUT_THRESHOLD = -2
 
 class Card:
     def __init__(self, rank: str):
@@ -221,7 +221,7 @@ def get_basic_strategy_move(player_hand: Hand, dealer_up_card: Card, hit_soft_17
         # 12 stand vs 4-6, hit otherwise
         if 4 <= dealer_val <= 6: return 'S'
         return 'H'
-    if val == 11: return 'D'
+    if val == 11: return 'H' if (not HIT_SOFT_17 and dealer_val == 11) else 'D'
     if val == 10:
         if dealer_val <= 9: return 'D'
         return 'H'
@@ -419,7 +419,15 @@ def main():
     print("-" * 40)
     print(f"Total Cumulative Profit: {total_cumulative_profit}")
 
-def main_parallel(num_shoes: int = 100, num_workers: int = None):
+def init_worker(config):
+    global HIT_SOFT_17, NUM_DECKS, PENETRATION, BASE_BET, WONG_OUT_THRESHOLD
+    HIT_SOFT_17 = config['h17']
+    NUM_DECKS = config['decks']
+    PENETRATION = config['pen']
+    BASE_BET = config['min_bet']
+    WONG_OUT_THRESHOLD = config['wong_out']
+
+def main_parallel(num_shoes: int = 100, num_workers: int = None, config: dict = None):
     """
     Parallel simulation across multiple shoes.
      Each shoe is played until penetration is reached.
@@ -427,6 +435,7 @@ def main_parallel(num_shoes: int = 100, num_workers: int = None):
     Args:
         num_shoes: Number of shoes to simulate
         num_workers: Number of CPU cores to use (default: all available)
+        config: Configuration dictionary
     """
     from multiprocessing import Pool, cpu_count
     import time
@@ -436,7 +445,7 @@ def main_parallel(num_shoes: int = 100, num_workers: int = None):
     
     print(f"Starting parallel simulation:")
     print(f"  - Shoes: {num_shoes:,}")
-    print(f"  - Strategy: Play until penetration ({PENETRATION*100}%)")
+    print(f"  - Config: {config}")
     print(f"  - Workers: {num_workers}")
     print("-" * 40)
     
@@ -444,7 +453,7 @@ def main_parallel(num_shoes: int = 100, num_workers: int = None):
     
     start_time = time.time()
     
-    with Pool(num_workers) as pool:
+    with Pool(num_workers, initializer=init_worker, initargs=(config,)) as pool:
         results = pool.map(simulate_shoe, args)
     
     elapsed = time.time() - start_time
@@ -464,11 +473,36 @@ def main_parallel(num_shoes: int = 100, num_workers: int = None):
     print(f"House Edge: {-total_profit / (total_hands * BASE_BET) * 100:.2f}%")
 
 if __name__ == "__main__":
+    import argparse
     import sys
     
-    if len(sys.argv) > 1 and sys.argv[1] == "--parallel":
-        # Parse optional arguments: python3 sim.py --parallel [num_shoes]
-        num_shoes = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
-        main_parallel(num_shoes)
+    parser = argparse.ArgumentParser(description="Blackjack Simulation")
+    parser.add_argument("--parallel", nargs="?", const=1000, type=int, help="Run in parallel mode with optional num_shoes")
+    parser.add_argument("--h17", action="store_true", help="Hit Soft 17 (flag)")
+    parser.add_argument("--decks", type=int, default=6, help="Number of decks")
+    parser.add_argument("--pen", type=float, default=0.75, help="Penetration (0.0-1.0)")
+    parser.add_argument("--min_bet", type=int, default=10, help="Minimum bet")
+    parser.add_argument("--wong_out", type=float, default=-2, help="Wong out threshold")
+    
+    args = parser.parse_args()
+
+    # Update Globals
+    HIT_SOFT_17 = args.h17
+    NUM_DECKS = args.decks
+    PENETRATION = args.pen
+    BASE_BET = args.min_bet
+    WONG_OUT_THRESHOLD = args.wong_out
+    
+    config = {
+        'h17': HIT_SOFT_17,
+        'decks': NUM_DECKS,
+        'pen': PENETRATION,
+        'min_bet': BASE_BET,
+        'wong_out': WONG_OUT_THRESHOLD
+    }
+    
+    if args.parallel:
+        main_parallel(args.parallel, config=config)
     else:
+        print(f"Running single-threaded with config: {config}")
         main()
