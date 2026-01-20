@@ -9,4 +9,5 @@ Options:
 - `--pen n` to set penetration to n (default 0.75)
 - `--min_bet n` to set minimum bet to n (TODO: custom bet spreading. Default is 1 to 9)
 - `--wong_out n` to set TC threshold at which the shoe ends (default -2)
-TODO: add options for DAS (currently allowed) and RSA (currently allowed)
+
+TODO: add options for DAS (currently allowed) and RSA (currently not allowed)
